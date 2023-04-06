@@ -8,7 +8,6 @@ const redis = require("redis")
 const { Server } = require("socket.io")
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-
 const client_id="23ca205a4e951b3d0464"
 const client_secret="a40831240ce5aeab012a248c9e5069152dcf2976"
 
@@ -43,16 +42,17 @@ app.get("/welcome",(req,res)=>{
 app.get("/home", (req, res) => {
     res.send("Home...")
 })
+app.use(authenticate)
 
 app.get("/room",async(req,res)=>{
   const{code}=req.query
   const accesstoken=await fetch("https://github.com/login/oauth/access_token",{
-    method:"POST",
-    headers:{
-    Accept: "application/json",
-    "content-type":"application/json"
-    },
-    body: JSON.stringify({
+      method:"POST",
+      headers:{
+          Accept: "application/json",
+          "content-type":"application/json"
+        },
+        body: JSON.stringify({
     client_id:client_id,
     client_secret:client_secret,
     code
@@ -68,11 +68,11 @@ app.get("/room",async(req,res)=>{
         }
     }).then((res)=>res.json())
     
-
+    
     // console.log(userdetails.email);
     console.log(userdetails.name);
     fs.writeFileSync("name.txt",userdetails.name)
-
+    
     const userEmail = await client.SET("userEmail",`${userdetails.email}`)
     console.log(userEmail);
    
@@ -80,33 +80,9 @@ app.get("/room",async(req,res)=>{
     res.sendFile(path.join(__dirname, "../dexterlab.html"));
 })
 
-app.get("/rooms",(req,res)=>{
-     res.sendFile(path.join(__dirname, "../dexterlab.html"));
-})
 
 
-app.use(authenticate)
 
-app.get("/dexterlab",(req,res)=>{
-    res.sendFile(path.join(__dirname, "../dexterlab.html"));
-})
-
-
-app.get("/logout", async(req, res) => {
-   const token = await client.GET("token")
-    //redis
-    if(!token){
-        res.send("token expired login again")
-    }else{
-        await client.SADD("logout", token)
-        //file
-            // const blacklisted_data = JSON.parse(fs.readFileSync("./blacklist.json","utf-8"));
-            // blacklisted_data.push(token)
-            // fs.writeFileSync("./blacklist.json", JSON.stringify(blacklisted_data))
-        // console.log(blacklisted_data);
-        res.send("Logout successfully");
-    }
-})
 
 const httpServer = http.createServer(app)
 
@@ -124,26 +100,42 @@ httpServer.listen(2020,async ()=>{
 const wss = new Server(httpServer)
 
 let clientArr = []
-let name = ""
-
+let name ;
+let dis;
 wss.on("connection", (socket) => {
-    // socket.emit("put",clientArr)
+
     console.log("client connected")
-    socket.on("msg", (data) => {
-        // console.log(data)
-        socket.broadcast.emit("msgd", data)
-        socket.emit("msgd", data)
-        // console.log(data)
+
+    // socket.on("msg", (data) => {
+    //     socket.broadcast.emit("msgd", data)
+    //     socket.emit("mymsg", data)
+    // })
+
+    ///=====================mycode======================================
+    socket.on("join", ({username,room}) => {
+        dis=1;
+        let id= socket.id
+        let user = {id,username,room}
+        clientArr.push(user)
+        socket.join(user.room);
+
+        wss.to(user.room).emit("disc", {
+            room: user.room, users: user.username, dis: 1
+        })
+        
     })
 
-    socket.on("join", (data) => {
-        console.log(data)
-        clientArr.push(data)
-        name = data
-        console.log(clientArr, data)
-        socket.broadcast.emit("online", clientArr)
-        socket.emit("online", clientArr)
-    })
+    socket.on("chatMessage",(data)=>{
+              socket.broadcast.emit("msgd", data)
+              socket.emit("mymsg", data)
+
+  });
+//   function getRoomUsers(room) {
+//     return clientArr.filter(user=> user.room == room)
+//  }
+
+
+  //========================till-here=============================
     
     socket.on("html", (data) => {
         console.log(data)
@@ -180,21 +172,21 @@ wss.on("connection", (socket) => {
         socket.emit("a", data)
     })
     });
+    socket.on("disconnect",()=>{
+        
+        const user = userLeave(socket.id)
+          //  Get all room user
+          console.log(user.username + "  has left the lab")
+          wss.to(user.room).emit("disc", {
+            room: user.room, users: user.username, dis:0
+        })
 
-    socket.on("sync_code", (socketId, code) => {
-        io.to(socketId).emit("code_change", { code });
-    });
-
-
-
-    socket.on("dis", async (name) => {
-        for (let i = 0; i < clientArr.length; i++) {
-            if (clientArr[i] == name) {
-                await clientArr.splice((i - 1), 1)
-            }
-        }
-        socket.broadcast.emit("disc", clientArr)
-        socket.emit("disc", clientArr)
     })
+    function userLeave(id){
+        const index = clientArr.findIndex(user=>user.id==id)
+        if(index !== -1) {
+            return clientArr.splice(index,1)[0]
+        }
+    }
 })
 
