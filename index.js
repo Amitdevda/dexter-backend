@@ -12,7 +12,7 @@ const client_id="23ca205a4e951b3d0464"
 const client_secret="a40831240ce5aeab012a248c9e5069152dcf2976"
 
 const client= redis.createClient();
-client.on('error', err => console.log('Redis Client Error', err));
+client.on('error', err => console.log('Redis Client Error== Bhai Redis server on kro terminal m===', err));
 client.connect();
 
 

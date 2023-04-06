@@ -6,7 +6,7 @@ const redis = require("redis")
 require('dotenv').config()
 
 const client= redis.createClient();
-client.on('error', err => console.log('Redis Client Error', err));
+client.on('error', err => console.log('Redis Client Error== Bhai Redis server on kro terminal m===', err));
 client.connect();
 
 
